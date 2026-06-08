@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}ND Telemetry — visão geral{% endblock %}
+{% block body %}
+
+{% set ov = overview %}
+<div class="cards">
+  <div class="card"><div class="n">{{ ov.total_devices }}</div><div class="l">Devices</div></div>
+  <div class="card {% if ov.stale %}warn{% endif %}"><div class="n">{{ ov.stale }}</div><div class="l">Offline (&gt;10min)</div></div>
+  <div class="card"><div class="n">{{ ov.boots_24 }}</div><div class="l">Reboots 24h</div></div>
+  <div class="card {% if ov.crashes_24 %}bad{% endif %}"><div class="n">{{ ov.crashes_24 }}</div><div class="l">Crashes/WDT 24h</div></div>
+  <div class="card {% if ov.wifi_24 %}warn{% endif %}"><div class="n">{{ ov.wifi_24 }}</div><div class="l">Eventos WiFi 24h</div></div>
+  <div class="card"><div class="n">{{ ov.boots_7 }}</div><div class="l">Reboots 7d</div></div>
+</div>
+
+<h2>Motivos de reboot (7 dias)</h2>
+{% if ov.by_reason %}
+  {% set maxc = ov.by_reason[0].c %}
+  <table>
+    <tr><th style="width:220px">Motivo</th><th style="width:60px">Qtd</th><th>%</th></tr>
+    {% for r in ov.by_reason %}
+    <tr>
+      <td>
+        {% if r.reason in [1,2,3] %}<span class="pill bad">{{ r.reason_name or '—' }}</span>
+        {% else %}<span class="pill ok">{{ r.reason_name or '—' }}</span>{% endif %}
+      </td>
+      <td>{{ r.c }}</td>
+      <td><div class="bar"><span style="width:{{ (r.c / maxc * 100)|round(0,'floor') }}%"></span></div></td>
+    </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <div class="empty">Nenhum reboot registrado ainda.</div>
+{% endif %}
+
+<h2>Devices</h2>
+{% if devices %}
+<table>
+  <tr>
+    <th>Status</th><th>Device</th><th>FW</th><th>Último contato</th>
+    <th>Reboots 24h</th><th>Crashes 24h</th><th>WiFi 24h</th>
+    <th>Último motivo</th><th>Heap</th><th>IP</th>
+  </tr>
+  {% for d in devices %}
+  {% set offline = (now - d.last_seen) > stale_after %}
+  <tr>
+    <td><span class="dot {{ 'bad' if offline else 'ok' }}"></span>{{ 'offline' if offline else 'online' }}</td>
+    <td><a href="/device/{{ d.id }}"><code>{{ d.id }}</code></a></td>
+    <td class="muted">{{ d.fw or '-' }}</td>
+    <td>{{ d.last_seen|ago }} <span class="muted">atrás</span></td>
+    <td>{{ d.boots_24 }}</td>
+    <td>{% if d.crashes_24 %}<span class="pill bad">{{ d.crashes_24 }}</span>{% else %}0{% endif %}</td>
+    <td>{% if d.wifi_24 %}<span class="pill warn">{{ d.wifi_24 }}</span>{% else %}0{% endif %}</td>
+    <td class="muted">{{ d.last_reason or '-' }}</td>
+    <td class="muted">{{ d.last_heap if d.last_heap is not none else '-' }}</td>
+    <td class="muted">{{ d.last_ip or '-' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+  <div class="empty">Nenhum device reportou ainda. Aponte um device para <code>POST /v1/boot</code> ou <code>GET /v1/i</code>.</div>
+{% endif %}
+
+{% endblock %}

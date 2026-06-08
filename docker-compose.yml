@@ -1,0 +1,15 @@
+# Convenience launcher. Same single image, both servers, persistent volume.
+services:
+  telemetry:
+    build: .
+    image: nd-telemetry:latest
+    container_name: nd-telemetry
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # device ingest API (HTTP, no auth)
+      - "8081:8081"   # admin dashboard (HTTP Basic)
+    environment:
+      ND_ADMIN_USER: admin
+      ND_ADMIN_PASS: change-me
+    volumes:
+      - ./data:/data
