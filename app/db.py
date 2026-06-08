@@ -8,6 +8,23 @@ from .models import reason_name, exc_name, is_abnormal
 
 DB_PATH = os.environ.get("ND_DB_PATH", "data/telemetry.db")
 
+
+def fmt_duration(s):
+    """Seconds -> 'HH:MM:SS' (or 'Nd HH:MM:SS' when >= 1 day)."""
+    try:
+        s = int(s)
+    except (TypeError, ValueError):
+        return "-"
+    if s < 0:
+        s = 0
+    d, r = divmod(s, 86400)
+    h, r = divmod(r, 3600)
+    m, sec = divmod(r, 60)
+    if d:
+        return f"{d}d {h:02d}:{m:02d}:{sec:02d}"
+    return f"{h:02d}:{m:02d}:{sec:02d}"
+
+
 _lock = threading.Lock()
 _conn = None
 
@@ -181,6 +198,10 @@ def list_devices(now=None):
                  WHERE e.device_id=d.id AND e.ts>=:day AND e.type LIKE 'wifi%') AS wifi_24,
               (SELECT reason_name FROM boots b
                  WHERE b.device_id=d.id ORDER BY b.ts DESC LIMIT 1) AS last_reason,
+              (SELECT reason FROM boots b
+                 WHERE b.device_id=d.id ORDER BY b.ts DESC LIMIT 1) AS last_reason_code,
+              (SELECT ts FROM boots b
+                 WHERE b.device_id=d.id ORDER BY b.ts DESC LIMIT 1) AS last_boot_ts,
               (SELECT heap_free FROM boots b
                  WHERE b.device_id=d.id ORDER BY b.ts DESC LIMIT 1) AS last_heap
            FROM devices d ORDER BY d.last_seen DESC""",
@@ -222,7 +243,7 @@ def build_timeline(dev, limit=200):
         if b["heap_free"] is not None:
             detail.append(f"heap={b['heap_free']}")
         if b["prev_uptime"] is not None:
-            detail.append(f"prev_uptime={b['prev_uptime']}s")
+            detail.append(f"uptime={fmt_duration(b['prev_uptime'])}")
         items.append({
             "ts": b["ts"], "kind": "boot",
             "abnormal": is_abnormal(b["reason"]),

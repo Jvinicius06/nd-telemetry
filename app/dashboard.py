@@ -60,6 +60,7 @@ def _fmt_hex(v):
 _TEMPLATES.env.filters["dt"] = _fmt_dt
 _TEMPLATES.env.filters["ago"] = _fmt_ago
 _TEMPLATES.env.filters["hexa"] = _fmt_hex
+_TEMPLATES.env.filters["dur"] = db.fmt_duration
 
 
 # ----- routes ----------------------------------------------------------------
@@ -86,10 +87,16 @@ def device(dev: str, request: Request, _: str = Depends(require_admin)):
     d = db.get_device(dev)
     if not d:
         raise HTTPException(status_code=404, detail="device not found")
+    now = int(time.time())
+    last_boots = db.device_boots(dev, 1)
+    last_boot = last_boots[0] if last_boots else None
     return _TEMPLATES.TemplateResponse("device.html", {
         "request": request,
-        "now": int(time.time()),
+        "now": now,
         "device": d,
+        "uptime": (now - last_boot["ts"]) if last_boot else None,
+        "last_reason": last_boot["reason_name"] if last_boot else None,
+        "last_reason_code": last_boot["reason"] if last_boot else None,
         "reasons": db.device_reason_breakdown(dev),
         "timeline": db.build_timeline(dev),
     })

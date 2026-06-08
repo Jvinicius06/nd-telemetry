@@ -8,6 +8,8 @@
 <h2>Device <code>{{ device.id }}</code></h2>
 <div class="cards">
   <div class="card"><div class="n"><span class="dot {{ 'bad' if offline else 'ok' }}"></span>{{ 'offline' if offline else 'online' }}</div><div class="l">Status</div></div>
+  <div class="card"><div class="n" style="font-size:18px">{{ uptime|dur if uptime is not none else '-' }}</div><div class="l">Uptime (desde o último boot)</div></div>
+  <div class="card {{ 'bad' if last_reason_code in [1,2,3] else '' }}"><div class="n" style="font-size:18px">{{ last_reason or '-' }}</div><div class="l">Último motivo de reinício</div></div>
   <div class="card"><div class="n" style="font-size:18px">{{ device.last_seen|ago }}</div><div class="l">Último contato</div></div>
   <div class="card"><div class="n" style="font-size:18px">{{ device.fw or '-' }}</div><div class="l">Firmware</div></div>
   <div class="card"><div class="n" style="font-size:18px">{{ device.last_ip or '-' }}</div><div class="l">Último IP</div></div>
