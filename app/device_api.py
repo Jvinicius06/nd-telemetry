@@ -46,6 +46,7 @@ class BootReport(BaseModel):
     epc3: Optional[int] = None
     excvaddr: Optional[int] = None
     depc: Optional[int] = None
+    tag: Optional[str] = None
     heap: Optional[int] = Field(None, description="free heap at boot")
     uptime: Optional[int] = Field(None, description="previous session uptime (s)")
     rssi: Optional[int] = None
@@ -96,6 +97,7 @@ async def ingest_get(request: Request):
             "exccause": _int(q.get("ec")), "epc1": _int(q.get("epc1")),
             "epc2": _int(q.get("epc2")), "epc3": _int(q.get("epc3")),
             "excvaddr": _int(q.get("va")), "depc": _int(q.get("depc")),
+            "tag": (q.get("tag") or None),
             "heap": _int(q.get("h")), "uptime": _int(q.get("up")),
             "rssi": _int(q.get("rssi")),
         }, ip)

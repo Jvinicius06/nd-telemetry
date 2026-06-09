@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS boots (
     epc3        INTEGER,
     excvaddr    INTEGER,
     depc        INTEGER,
+    tag         TEXT,
     heap_free   INTEGER,
     prev_uptime INTEGER,
     rssi        INTEGER,
@@ -89,6 +90,10 @@ def init_db():
     _conn.execute("PRAGMA busy_timeout=5000")
     with _lock:
         _conn.executescript(SCHEMA)
+        # Migrate older DBs that predate the crash `tag` column.
+        cols = {r["name"] for r in _conn.execute("PRAGMA table_info(boots)")}
+        if "tag" not in cols:
+            _conn.execute("ALTER TABLE boots ADD COLUMN tag TEXT")
         _conn.commit()
 
 
@@ -116,14 +121,14 @@ def record_boot(data, ip):
         _upsert_device(dev, ts, data.get("fw"), ip)
         _conn.execute(
             """INSERT INTO boots(device_id, ts, reason, reason_name, exccause,
-                   epc1, epc2, epc3, excvaddr, depc, heap_free, prev_uptime,
+                   epc1, epc2, epc3, excvaddr, depc, tag, heap_free, prev_uptime,
                    rssi, fw, ip, raw)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (dev, ts, reason, reason_name(reason), data.get("exccause"),
              data.get("epc1"), data.get("epc2"), data.get("epc3"),
-             data.get("excvaddr"), data.get("depc"), data.get("heap"),
-             data.get("uptime"), data.get("rssi"), data.get("fw"), ip,
-             json.dumps(data, default=str)),
+             data.get("excvaddr"), data.get("depc"), data.get("tag"),
+             data.get("heap"), data.get("uptime"), data.get("rssi"),
+             data.get("fw"), ip, json.dumps(data, default=str)),
         )
         _conn.commit()
     return True
@@ -233,8 +238,15 @@ def device_reason_breakdown(dev):
 def build_timeline(dev, limit=200):
     """Merge boots + events into one reverse-chronological list for the UI."""
     items = []
+    # Auto-tags merely mirror the reset reason; only show custom pre-crash tags
+    # (e.g. STACK:udp, WIFIRST, OOM) which carry extra "where/why" context.
+    _AUTO_TAGS = {"POWERON", "HW_WDT", "XPTN", "SW_WDT", "RESTART",
+                  "EXT_RST", "UNKNOWN", ""}
     for b in device_boots(dev, limit):
         detail = []
+        tag = b.get("tag")
+        if tag and tag not in _AUTO_TAGS:
+            detail.append(f"tag={tag}")
         if b["reason"] == 2 and b["exccause"] is not None:
             detail.append(f"{exc_name(b['exccause'])}")
             # Always show the crash PC (epc1) and faulting address (excvaddr),
