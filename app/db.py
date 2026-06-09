@@ -237,14 +237,10 @@ def device_reason_breakdown(dev):
 def build_timeline(dev, limit=200):
     """Merge boots + events into one reverse-chronological list for the UI."""
     items = []
-    # Auto-tags merely mirror the reset reason; only show custom pre-crash tags
-    # (e.g. STACK:udp, WIFIRST, OOM) which carry extra "where/why" context.
-    _AUTO_TAGS = {"POWERON", "HW_WDT", "XPTN", "SW_WDT", "RESTART",
-                  "EXT_RST", "UNKNOWN", ""}
     for b in device_boots(dev, limit):
         detail = []
         tag = b.get("tag")
-        if tag and tag not in _AUTO_TAGS:
+        if tag:
             detail.append(f"tag={tag}")
         if b["reason"] == 2 and b["exccause"] is not None:
             detail.append(f"{exc_name(b['exccause'])} (ec={b['exccause']})")
