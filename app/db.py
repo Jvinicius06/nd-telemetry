@@ -5,6 +5,7 @@ import threading
 import time
 
 from .models import reason_name, exc_name, is_abnormal
+from . import notify
 
 DB_PATH = os.environ.get("ND_DB_PATH", "data/telemetry.db")
 
@@ -130,6 +131,7 @@ def record_boot(data, ip):
              data.get("fw"), ip, json.dumps(data, default=str)),
         )
         _conn.commit()
+    notify.notify_boot(data, ip)   # Discord alert on crashes (best-effort)
     return True
 
 
