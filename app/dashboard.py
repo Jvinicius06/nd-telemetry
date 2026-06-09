@@ -1,16 +1,14 @@
 """Admin dashboard (port 8081). Server-rendered, HTTP Basic auth, auto-refresh."""
 import os
-import re
 import secrets
 import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
-from . import db, symbolize
+from . import db
 
 app = FastAPI(title="ND Device Telemetry — Dashboard", docs_url=None,
               redoc_url=None, openapi_url=None)
@@ -101,27 +99,7 @@ def device(dev: str, request: Request, _: str = Depends(require_admin)):
         "last_reason_code": last_boot["reason"] if last_boot else None,
         "reasons": db.device_reason_breakdown(dev),
         "timeline": db.build_timeline(dev),
-        "has_elf": symbolize.have_elf(d.get("fw")),
     })
-
-
-@app.put("/elf/{fw}")
-async def upload_elf(fw: str, request: Request, _: str = Depends(require_admin)):
-    """Upload a firmware ELF (with DWARF) so crash addresses get decoded to
-    func (file:line). Body = raw ELF bytes. Example:
-        curl -u admin:pass --data-binary @firmware.elf http://host:8081/elf/3.0.5
-    """
-    if not re.fullmatch(r"[0-9A-Za-z._-]{1,32}", fw):
-        raise HTTPException(status_code=400, detail="bad fw name")
-    data = await request.body()
-    if len(data) < 4 or data[:4] != b"\x7fELF":
-        raise HTTPException(status_code=400, detail="not an ELF file")
-    os.makedirs(symbolize.elf_dir(), exist_ok=True)
-    path = os.path.join(symbolize.elf_dir(), f"{fw}.elf")
-    with open(path, "wb") as fh:
-        fh.write(data)
-    symbolize.clear_cache()
-    return PlainTextResponse(f"OK {len(data)} bytes -> {path}")
 
 
 @app.get("/api/overview")
