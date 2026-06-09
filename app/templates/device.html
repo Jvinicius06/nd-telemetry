@@ -35,6 +35,15 @@
 {% endif %}
 
 <h2>Timeline (reboots + eventos)</h2>
+<p class="muted" style="font-size:13px">
+  {% if has_elf %}
+    Símbolos carregados para o firmware <code>{{ device.fw }}</code> — endereços de crash são decodificados para <code>função (arquivo:linha)</code>.
+  {% else %}
+    Para ver <b>exatamente onde</b> o crash ocorreu, envie o ELF deste firmware:
+    <code>curl -u USER:PASS --data-binary @firmware.elf http://&lt;host&gt;:8081/elf/{{ device.fw or 'VERSAO' }}</code>
+    (epc1 = endereço do salto; <code>0x00000000</code> = salto para endereço nulo / retorno corrompido).
+  {% endif %}
+</p>
 {% if timeline %}
 <table>
   <tr><th style="width:160px">Quando</th><th style="width:90px">Tipo</th><th style="width:220px">Título</th><th>Detalhe</th></tr>

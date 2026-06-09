@@ -5,6 +5,7 @@ import threading
 import time
 
 from .models import reason_name, exc_name, is_abnormal
+from . import symbolize
 
 DB_PATH = os.environ.get("ND_DB_PATH", "data/telemetry.db")
 
@@ -236,10 +237,21 @@ def build_timeline(dev, limit=200):
         detail = []
         if b["reason"] == 2 and b["exccause"] is not None:
             detail.append(f"{exc_name(b['exccause'])}")
-            if b["epc1"]:
-                detail.append(f"epc1={b['epc1']:#010x}")
-            if b["excvaddr"]:
-                detail.append(f"addr={b['excvaddr']:#010x}")
+            # Always show the crash PC (epc1) and faulting address (excvaddr),
+            # even when 0x0 — an epc1 of 0 means the CPU jumped to a NULL/bad
+            # address (corrupted return or NULL function pointer), which is
+            # itself the diagnosis. Each address is decoded to func (file:line)
+            # when the matching firmware ELF is available (see symbolize.py).
+            fw = b.get("fw")
+            regs = (("epc1", "epc1", True), ("addr", "excvaddr", True),
+                    ("epc2", "epc2", False), ("epc3", "epc3", False),
+                    ("depc", "depc", False))
+            for label, key, always in regs:
+                v = b.get(key)
+                if v is None or (not always and not v):
+                    continue
+                loc = symbolize.decode(fw, v)
+                detail.append(f"{label}={v:#010x}" + (f" → {loc}" if loc else ""))
         if b["heap_free"] is not None:
             detail.append(f"heap={b['heap_free']}")
         if b["prev_uptime"] is not None:
