@@ -138,11 +138,14 @@ def record_boot(data, ip):
     return True
 
 
-def record_event(data, ip):
+def record_event(data, ip, ts=None):
     dev = data.get("dev")
     if not dev:
         return False
-    ts = int(time.time())
+    # Batched events arrive with a relative age; the caller passes the absolute
+    # ts it reconstructed (receive_time - age). Live events default to now.
+    if ts is None:
+        ts = int(time.time())
     with _lock:
         _upsert_device(dev, ts, data.get("fw"), ip)
         _conn.execute(
@@ -276,7 +279,7 @@ def build_timeline(dev, limit=200):
             detail.append(f"rssi={e['rssi']}")
         items.append({
             "ts": e["ts"], "kind": "event",
-            "abnormal": str(e["type"]).startswith("wifi"),
+            "abnormal": "disconnect" in str(e["type"]),
             "title": e["type"],
             "detail": (e["message"] or "") + ("  " + "  ".join(detail) if detail else ""),
             "fw": None, "ip": e["ip"],

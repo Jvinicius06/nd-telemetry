@@ -5,6 +5,7 @@ Designed to be trivial for a memory-starved device:
   * GET  query -> /v1/i?d=..&k=boot&...      (cheapest: no body, no headers fuss)
 Responses are tiny ("OK") to keep the device's RX buffer small.
 """
+import time
 from typing import Optional
 
 from fastapi import FastAPI, Request
@@ -12,6 +13,16 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import db
+
+# ESP8266 SDK WiFi disconnect reason codes (the common ones) -> friendly name.
+# Lets the dashboard show *why* a device dropped without decoding anything.
+_WIFI_REASON = {
+    1: "unspecified", 2: "auth_expire", 3: "auth_leave", 4: "assoc_expire",
+    5: "assoc_toomany", 6: "not_authed", 7: "not_assoced", 8: "assoc_leave",
+    9: "assoc_not_authed", 15: "4way_handshake_timeout", 16: "group_key_timeout",
+    200: "beacon_timeout", 201: "no_ap_found", 202: "auth_fail",
+    203: "assoc_fail", 204: "handshake_timeout",
+}
 
 app = FastAPI(title="ND Device Telemetry — Ingest", docs_url="/docs",
               redoc_url=None, openapi_url="/openapi.json")
@@ -109,3 +120,53 @@ async def ingest_get(request: Request):
             "heap": _int(q.get("h")), "rssi": _int(q.get("rssi")),
         }, ip)
     return PlainTextResponse("OK")
+
+
+@app.get("/v1/eb")
+async def ingest_event_batch(request: Request):
+    """Batched events with RELATIVE timestamps, sent in one request.
+
+    /v1/eb?d=MAC&name=..&fw=..&e=AGE:TOKEN:ARG,AGE:TOKEN:ARG,...
+
+    AGE is seconds-since-the-event measured on the device (uptime-based), so the
+    device needs no real clock. We reconstruct each absolute time as
+    (receive_time - age). TOKEN is a short type code (wd=wifi down, wu=wifi up);
+    ARG is the disconnect reason (wd) or RSSI (wu).
+    """
+    q = request.query_params
+    dev = q.get("d") or q.get("dev")
+    if not dev:
+        return PlainTextResponse("ERR no dev", status_code=400)
+    ip = _client_ip(request)
+    fw = q.get("fw")
+    now = int(time.time())
+
+    count = 0
+    for item in (q.get("e") or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        parts = item.split(":")
+        age = _int(parts[0]) if parts else None
+        if age is None:
+            continue
+        token = parts[1] if len(parts) > 1 else "ev"
+        arg = _int(parts[2]) if len(parts) > 2 else None
+
+        rec = {"dev": dev, "fw": fw}
+        if token == "wd":
+            rec["type"] = "wifi_disconnect"
+            if arg is not None:
+                name = _WIFI_REASON.get(arg)
+                rec["msg"] = "reason=%d (%s)" % (arg, name) if name else "reason=%d" % arg
+        elif token == "wu":
+            rec["type"] = "wifi_connect"
+            rec["rssi"] = arg
+        else:
+            rec["type"] = token
+            rec["msg"] = (parts[2] if len(parts) > 2 else None)
+
+        db.record_event(rec, ip, ts=now - max(0, age))
+        count += 1
+
+    return PlainTextResponse("OK %d" % count)
