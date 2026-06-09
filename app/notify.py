@@ -66,11 +66,13 @@ def notify_boot(data, ip):
     if reason == 2 and ec is not None:
         head += f" · {exc_name(ec)} (ec={ec})"
 
+    # Show only non-zero addresses — for an epc1=0 (null-jump) crash, epc3 and
+    # rtn (caller return address) are the decodable ones; zeros are just noise.
     regs = []
-    for k in ("epc1", "excvaddr"):
-        h = _hex(data.get(k))
-        if h:
-            regs.append(f"{k}={h}")
+    for k in ("epc1", "epc3", "excvaddr", "rtn"):
+        v = data.get(k)
+        if v:
+            regs.append(f"{k}={_hex(v)}")
     if data.get("tag"):
         regs.append(f"tag={data['tag']}")
     if data.get("heap") is not None:

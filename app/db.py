@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS boots (
     epc3        INTEGER,
     excvaddr    INTEGER,
     depc        INTEGER,
+    rtn         INTEGER,
     tag         TEXT,
     heap_free   INTEGER,
     prev_uptime INTEGER,
@@ -90,10 +91,12 @@ def init_db():
     _conn.execute("PRAGMA busy_timeout=5000")
     with _lock:
         _conn.executescript(SCHEMA)
-        # Migrate older DBs that predate the crash `tag` column.
+        # Migrate older DBs that predate later columns (add as needed).
         cols = {r["name"] for r in _conn.execute("PRAGMA table_info(boots)")}
         if "tag" not in cols:
             _conn.execute("ALTER TABLE boots ADD COLUMN tag TEXT")
+        if "rtn" not in cols:
+            _conn.execute("ALTER TABLE boots ADD COLUMN rtn INTEGER")
         _conn.commit()
 
 
@@ -121,14 +124,14 @@ def record_boot(data, ip):
         _upsert_device(dev, ts, data.get("fw"), ip)
         _conn.execute(
             """INSERT INTO boots(device_id, ts, reason, reason_name, exccause,
-                   epc1, epc2, epc3, excvaddr, depc, tag, heap_free, prev_uptime,
-                   rssi, fw, ip, raw)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   epc1, epc2, epc3, excvaddr, depc, rtn, tag, heap_free,
+                   prev_uptime, rssi, fw, ip, raw)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (dev, ts, reason, reason_name(reason), data.get("exccause"),
              data.get("epc1"), data.get("epc2"), data.get("epc3"),
-             data.get("excvaddr"), data.get("depc"), data.get("tag"),
-             data.get("heap"), data.get("uptime"), data.get("rssi"),
-             data.get("fw"), ip, json.dumps(data, default=str)),
+             data.get("excvaddr"), data.get("depc"), data.get("rtn"),
+             data.get("tag"), data.get("heap"), data.get("uptime"),
+             data.get("rssi"), data.get("fw"), ip, json.dumps(data, default=str)),
         )
         _conn.commit()
     notify.notify_boot(data, ip)   # Discord alert on crashes (best-effort)
@@ -252,7 +255,7 @@ def build_timeline(dev, limit=200):
             # offline with addr2line + the matching firmware ELF.
             for label, key in (("epc1", "epc1"), ("epc2", "epc2"),
                                ("epc3", "epc3"), ("excvaddr", "excvaddr"),
-                               ("depc", "depc")):
+                               ("depc", "depc"), ("rtn", "rtn")):
                 detail.append(f"{label}={(b.get(key) or 0):#010x}")
         if b["heap_free"] is not None:
             detail.append(f"heap={b['heap_free']}")
